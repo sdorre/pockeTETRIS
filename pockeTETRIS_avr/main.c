@@ -483,11 +483,11 @@ void drawScreenBorder(void) {
 
 int8_t readBlockArray(int8_t x, int8_t y) {
   if (y < 8) {
-    return ((blockArray[x][0] & 0b00000001 << y) >> y);
+    return ((blockArray[x][0] & (0b00000001 << y)) >> y);
   } else if (y > 15) {
-    return ((blockArray[x][2] & 0b00000001 << y - 15) >> y - 15);
+    return ((blockArray[x][2] & 0b00000001 << (y - 15)) >> (y - 15));
   } else {
-    return ((blockArray[x][1] & 0b00000001 << y - 8) >> y - 8);
+    return ((blockArray[x][1] & 0b00000001 << (y - 8)) >> (y - 8));
   }
 }
 
@@ -502,17 +502,19 @@ void writeblockArray(int8_t x, int8_t y, int8_t value) {
     arr = 1;
     y -= 8;
   }
-  if (value == 1) blockArray[x][arr] |= 0b00000001 << y; else blockArray[x][arr] &= (0b11111110 << y) | (0b01111111 >> 7 - y);
+  if (value == 1) 
+    blockArray[x][arr] |= 0b00000001 << y; 
+  else 
+    blockArray[x][arr] &= (0b11111110 << y) | (0b01111111 >> (7 - y));
 }
 
 int8_t readGhostArray(int8_t x, int8_t y) {
-  if (y < 8) {
+  if (y < 8)
     return ((ghostArray[x][0] & 0b00000001 << y) >> y);
-  } else if (y > 15) {
-    return ((ghostArray[x][2] & 0b00000001 << y - 15) >> y - 15);
-  } else {
-    return ((ghostArray[x][1] & 0b00000001 << y - 8) >> y - 8);
-  }
+  else if (y > 15)
+    return ((ghostArray[x][2] & 0b00000001 << (y - 15)) >> (y - 15));
+  else
+    return ((ghostArray[x][1] & 0b00000001 << (y - 8)) >> (y - 8));
 }
 
 void writeGhostArray(int8_t x, int8_t y, int8_t value) {
@@ -526,7 +528,7 @@ void writeGhostArray(int8_t x, int8_t y, int8_t value) {
     arr = 1;
     y -= 8;
   }
-  if (value == 1) ghostArray[x][arr] |= 0b00000001 << y; else ghostArray[x][arr] &= (0b11111110 << y) | (0b01111111 >> 7 - y);
+  if (value == 1) ghostArray[x][arr] |= 0b00000001 << y; else ghostArray[x][arr] &= (0b11111110 << y) | (0b01111111 >> (7 - y));
 }
 
 void fillGrid(int8_t value, int8_t mode) {
@@ -926,10 +928,10 @@ int main (void)
   /* The lowercase character set is seriously compromised and hacked about to remove unused letters in order to save code space
      .. hence all lowercase words look like nonsense! See font8x8AJ.h for details on the mapping.
   */
-/*  
+
   ssd1306_char_f8x8(1, 48, " FOR");
   ssd1306_char_f8x8(1, 40, "DADDIO");
-*/
+
   drawScreenBorder();
 
   int8_t lxn, lxn2;
