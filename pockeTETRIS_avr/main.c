@@ -344,21 +344,6 @@ void ssd1306_fillscreen(char fill_Data) {
   }
 }
 
-void playerIncTetris() { // PB2 pin button interrupt
-  if (keyLock == 0) {
-    keyLock = 2;
-    keyTime = millis();
-  }
-}
-
-//added for 3rd button
-void playerIncTetris1() { // PB1 pin button interrupt
-  if (keyLock == 0) {
-    keyLock = 3;
-    keyTime = millis();
-  }
-}
-
 void displayScore(int score, int xpos, int y, int8_t blank) {
   int8_t x, lxn;
   int8_t scoreOut[6];
@@ -812,10 +797,6 @@ void playTetris(void) {
   fillGrid(0, NORMAL);
   fillGrid(0, GHOST);
 
-  // Attach the interrupt to read key 2
-  //attachInterrupt(0, playerIncTetris, RISING);
-  //attachInterrupt(1, playerIncTetris1, RISING);//3rd button
-
   loadPiece(my_random(1, 8), STARTY, STARTX);
   drawPiece(DRAW);
   if (createGhost()) drawGhost(DRAW);
@@ -903,11 +884,14 @@ void system_sleep() {
 ISR(PCINT0_vect) { // PB0 pin button interrupt
   if (keyLock == 0) {
     keyLock = 1;
-    keyTime = millis();
   }
   if (digitalRead(1) == HIGH){
     keyLock = 3;
   }
+  if (digitalRead(0) == HIGH){
+    keyLock = 2;
+  }
+  keyTime = millis();
 }
 
 int main (void)
