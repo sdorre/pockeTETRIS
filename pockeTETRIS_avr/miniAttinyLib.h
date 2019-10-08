@@ -8,6 +8,8 @@
 #define HIGH 1
 #define LOW 0
 
+void init_millis();
+
 unsigned long millis();
 unsigned long micros();
 

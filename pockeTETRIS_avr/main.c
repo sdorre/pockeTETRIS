@@ -1,3 +1,4 @@
+#include "i2cmaster.h"
 #include "miniAttinyLib.h"
 #include "font8x8AJ.h"
 
@@ -8,7 +9,7 @@
 #include <avr/eeprom.h>
 #include <util/delay.h>
 #include <avr/interrupt.h> // needed for the additional interrupt
- 
+
  // Mode settings for functions with multiple purposes
 #define NORMAL 0
 #define GHOST 1
@@ -119,14 +120,9 @@ const int8_t brickLogo[] PROGMEM = {
   0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80
 };
 
-// Defines for OLED output
-#define SSD1306XLED_H
 #define SSD1306_SCL   PORTB4  // SCL, Pin 4 on SSD1306 Board - for webbogles board
 #define SSD1306_SDA   PORTB3  // SDA, Pin 3 on SSD1306 Board - for webbogles board
 #define SSD1306_SA    0x78  // Slave address
-
-#define DIGITAL_WRITE_HIGH(PORT) PORTB |= (1 << PORT)
-#define DIGITAL_WRITE_LOW(PORT) PORTB &= ~(1 << PORT)
 
 // Function prototypes - screen control modified from https://bitbucket.org/tinusaur/ssd1306xled
 void ssd1306_init(void);
@@ -146,7 +142,7 @@ void doNumber (int x, int y, int value);
 
 // Function prototypes - tetris-specific
 void playTetris(void);
-void handleInput(void);
+// void handleInput(void);
 
 void drawGameScreen(int startCol, int endCol, int startRow, int endRow, int8_t mode);
 void drawScreen(int startCol, int endCol, int startRow, int endRow, int8_t mode);
@@ -198,7 +194,7 @@ int lastGhostRow = 0;           // Buffer to hold previous ghost position - for 
 int score = 0;                  // Score buffer
 int topScore = 0;               // High score buffer
 
-int8_t challengeMode = 0;         // Is the system in "Hard" mode?
+// int8_t challengeMode = 0;         // Is the system in "Hard" mode?
 int8_t ghost = 1;                 // Is the ghost active?
 
 int level = 0;                  // Current level (increments once per cleared line)
@@ -232,8 +228,7 @@ void ssd1306_char_f8x8(char x, char y, const char ch[]) {
 
 // Screen control functions
 void ssd1306_init(void) {
-  DDRB |= (1 << SSD1306_SDA); // Set port as output
-  DDRB |= (1 << SSD1306_SCL); // Set port as output
+  i2c_init();                                // init I2C interface
 
   ssd1306_send_command(0xAE); // display off
   ssd1306_send_command(0x00); // Set Memory Addressing Mode
@@ -266,47 +261,26 @@ void ssd1306_init(void) {
 }
 
 void ssd1306_xfer_start(void) {
-  DIGITAL_WRITE_HIGH(SSD1306_SCL);  // Set to HIGH
-  DIGITAL_WRITE_HIGH(SSD1306_SDA);  // Set to HIGH
-  DIGITAL_WRITE_LOW(SSD1306_SDA);   // Set to LOW
-  DIGITAL_WRITE_LOW(SSD1306_SCL);   // Set to LOW
+  i2c_start_wait(SSD1306_SA+I2C_WRITE);
 }
 
 void ssd1306_xfer_stop(void) {
-  DIGITAL_WRITE_LOW(SSD1306_SCL);   // Set to LOW
-  DIGITAL_WRITE_LOW(SSD1306_SDA);   // Set to LOW
-  DIGITAL_WRITE_HIGH(SSD1306_SCL);  // Set to HIGH
-  DIGITAL_WRITE_HIGH(SSD1306_SDA);  // Set to HIGH
+  i2c_stop();
 }
 
 void ssd1306_send_byte(char byte) {
-  char i;
-  for (i = 0; i < 8; i++)
-  {
-    if ((byte << i) & 0x80)
-      DIGITAL_WRITE_HIGH(SSD1306_SDA);
-    else
-      DIGITAL_WRITE_LOW(SSD1306_SDA);
-
-    DIGITAL_WRITE_HIGH(SSD1306_SCL);
-    DIGITAL_WRITE_LOW(SSD1306_SCL);
-  }
-  DIGITAL_WRITE_HIGH(SSD1306_SDA);
-  DIGITAL_WRITE_HIGH(SSD1306_SCL);
-  DIGITAL_WRITE_LOW(SSD1306_SCL);
+  i2c_write(byte);
 }
 
 void ssd1306_send_command(char command) {
-  ssd1306_xfer_start();
-  ssd1306_send_byte(SSD1306_SA);  // Slave address, SA0=0
+  i2c_start_wait(SSD1306_SA+I2C_WRITE);
   ssd1306_send_byte(0x00);  // write command
   ssd1306_send_byte(command);
   ssd1306_xfer_stop();
 }
 
 void ssd1306_send_data_start(void) {
-  ssd1306_xfer_start();
-  ssd1306_send_byte(SSD1306_SA);
+  i2c_start_wait(SSD1306_SA+I2C_WRITE);
   ssd1306_send_byte(0x40);  //write data
 }
 
@@ -317,8 +291,7 @@ void ssd1306_send_data_stop(void) {
 void ssd1306_setpos(char x, char y)
 {
   if (y > 7) return;
-  ssd1306_xfer_start();
-  ssd1306_send_byte(SSD1306_SA);  //Slave address,SA0=0
+  i2c_start_wait(SSD1306_SA+I2C_WRITE);
   ssd1306_send_byte(0x00);  //write command
 
   ssd1306_send_byte(0xb0 + y);
@@ -487,9 +460,9 @@ void writeblockArray(int8_t x, int8_t y, int8_t value) {
     arr = 1;
     y -= 8;
   }
-  if (value == 1) 
-    blockArray[x][arr] |= 0b00000001 << y; 
-  else 
+  if (value == 1)
+    blockArray[x][arr] |= 0b00000001 << y;
+  else
     blockArray[x][arr] &= (0b11111110 << y) | (0b01111111 >> (7 - y));
 }
 
@@ -805,15 +778,15 @@ void playTetris(void) {
   setNextBlock(nextPiece);
 
   // Fill up the screen with random crap if it's in challenge mode!
-  if (challengeMode) {
-    int8_t cl;
-    for (cl = 0; cl < 100; cl++) {
-      drawPiece(ERASE);
-      movePieceDown();
-      if (my_random(1, 8) > 4) movePieceLeft();
-      drawPiece(DRAW);
-    }
-  }
+  // if (challengeMode) {
+  //   int8_t cl;
+  //   for (cl = 0; cl < 100; cl++) {
+  //     drawPiece(ERASE);
+  //     movePieceDown();
+  //     if (my_random(1, 8) > 4) movePieceLeft();
+  //     drawPiece(DRAW);
+  //   }
+  // }
 
   // Reset the level
   level = STARTLEVEL;
@@ -896,82 +869,79 @@ ISR(PCINT0_vect) { // PB0 pin button interrupt
 
 int main (void)
 {
-  DDRB = 0b00000000;    // set PB1 as output (for the speaker)
-  MCUCR |= ISC01 | ISC00; // set rising edge of INT0 generates an interrupt
-  PCMSK = 0b00000011;   // pin change mask: listen to portb bit 1
-  GIMSK |= 0b00100000;  // enable PCINT interrupt
-  sei();                // enable all interrupts
-  ssd1306_init();       // initialise the screen
-  keyLock = 0;
+    DDRB = 0b00000000;    // set PB1 as output (for the speaker)
+    PCMSK = 0b00000011;   // pin change mask: listen to portb bit 1
+    GIMSK |= 0b00100000;  // enable PCINT interrupt
+    sei();                // enable all interrupts
+
+    init_millis();
+
+    ssd1306_init();       // initialise the screen
+    keyLock = 0;
 
   while (1) {
-  ssd1306_init();
-  ssd1306_fillscreen(0x00);
 
   ssd1306_char_f8x8(1, 64, "TETRIS");
   /* The lowercase character set is seriously compromised and hacked about to remove unused letters in order to save code space
      .. hence all lowercase words look like nonsense! See font8x8AJ.h for details on the mapping.
   */
 
-  ssd1306_char_f8x8(1, 48, " FOR");
-  ssd1306_char_f8x8(1, 40, "DADDIO");
+  // drawScreenBorder();
 
-  drawScreenBorder();
-
-  int8_t lxn, lxn2;
-  for (lxn = 0; lxn < 8; lxn++) {
-    ssd1306_setpos(78, lxn);
-    ssd1306_send_data_start();
-    for (lxn2 = 0; lxn2 < 36; lxn2++) {
-      ssd1306_send_byte(pgm_read_byte(&brickLogo[36 * lxn + lxn2]));
-    }
-    ssd1306_send_data_stop();
-  }
+  // int8_t lxn, lxn2;
+  // for (lxn = 0; lxn < 8; lxn++) {
+  //   ssd1306_setpos(78, lxn);
+  //   ssd1306_send_data_start();
+  //   for (lxn2 = 0; lxn2 < 36; lxn2++) {
+  //     ssd1306_send_byte(pgm_read_byte(&brickLogo[36 * lxn + lxn2]));
+  //   }
+  //   ssd1306_send_data_stop();
+  // }
 
   long startT = millis();
-  long nowT = 0;
-  int8_t sChange = 0;
-  while (digitalRead(0) == HIGH) {
-    nowT = millis();
-    if (nowT - startT > 2000) {
-      sChange = 1;
-      if (digitalRead(2) == HIGH) {
-        ssd1306_char_f8x8(2, 8, "MODE");
-        if (challengeMode == 0) {
-          challengeMode = 1;
-          ssd1306_char_f8x8(2, 16, "HARD");
-        } else {
-          challengeMode = 0;
-          ssd1306_char_f8x8(1, 16, "NORMAL");
-        }
-      } else {
-        ssd1306_char_f8x8(1, 16, "GHOST");
-        if (ghost == 0) {
-          ghost = 1;
-          ssd1306_char_f8x8(2, 8, "ON");
-        } else {
-          ghost = 0;
-          ssd1306_char_f8x8(2, 8, "OFF");
-        }
-      }
-      break;
-    }
-    if (sChange == 1) break;
-  }
-  while (digitalRead(0) == HIGH);
-
-  if (sChange == 0) {
-    _delay_ms(1600);
-
-    ssd1306_char_f8x8(1, 20, "LOVE");
-    ssd1306_char_f8x8(1, 10, "DOM");
-    _delay_ms(1500);
-    ssd1306_fillscreen(0x00);
+  // long nowT = 0;
+  // int8_t sChange = 0;
+  // while (digitalRead(0) == HIGH) {
+  //   nowT = millis();
+  //   if (nowT - startT > 2000) {
+  //     sChange = 1;
+  //     if (digitalRead(2) == HIGH) {
+  //       ssd1306_char_f8x8(2, 8, "MODE");
+  //       if (challengeMode == 0) {
+  //         challengeMode = 1;
+  //         ssd1306_char_f8x8(2, 16, "HARD");
+  //       } else {
+  //         challengeMode = 0;
+  //         ssd1306_char_f8x8(1, 16, "NORMAL");
+  //       }
+  //     } else {
+  //       ssd1306_char_f8x8(1, 16, "GHOST");
+  //       if (ghost == 0) {
+  //         ghost = 1;
+  //         ssd1306_char_f8x8(2, 8, "ON");
+  //       } else {
+  //         ghost = 0;
+  //         ssd1306_char_f8x8(2, 8, "OFF");
+  //       }
+  //     }
+  //     break;
+  //   }
+  //   if (sChange == 1) break;
+  // }
+  // while (digitalRead(0) == HIGH);
+  //
+  // // if (sChange == 0) {
+  //   _delay_ms(1600);
+  //
+  //   // ssd1306_char_f8x8(1, 20, "LOVE");
+  //   // ssd1306_char_f8x8(1, 10, "DOM");
+  //   // _delay_ms(1500);
+  //   ssd1306_fillscreen(0x00);
     playTetris();
-  }
+  // }
   _delay_ms(1000);
   system_sleep();
   }
- 
+
   return 1;
 }

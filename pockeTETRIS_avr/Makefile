@@ -3,15 +3,15 @@
 
 DEVICE      = attiny85
 CLOCK      = 8000000
-PROGRAMMER = -c usbtiny 
-OBJECTS    = main.o miniAttinyLib.o
+PROGRAMMER = -c usbasp
+OBJECTS    = main.o miniAttinyLib.o i2cmaster.o
 # for ATTiny85
 # see http://www.engbedded.com/fusecalc/
-FUSES       = -U lfuse:w:0x62:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m 
+FUSES       = -U lfuse:w:0xe2:m -U hfuse:w:0xdf:m -U efuse:w:0xff:m
 
 # Tune the lines below only if you know what you are doing:
 AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE)
-COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE)
+COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK)UL -mmcu=$(DEVICE) -I. -funsigned-char
 
 # symbolic targets:
 all:	main.hex
@@ -21,9 +21,6 @@ all:	main.hex
 
 .S.o:
 	$(COMPILE) -x assembler-with-cpp -c $< -o $@
-
-.c.s:
-	$(COMPILE) -S $< -o $@
 
 flash:	all
 	$(AVRDUDE) -U flash:w:main.hex:i
